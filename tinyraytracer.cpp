@@ -340,13 +340,54 @@ bool scene_intersect(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphe
         float posY = -8.0; // Position Y du plan meme que le bonhomme de neige
         float d = (orig.y + posY)/dir.y; // the checkerboard plane has equation y = -4
         Vec3f pt = orig + dir*d;
-        if (d>0 && fabs(pt.x)<10 && pt.z<0 && pt.z>-30 && d<spheres_dist && d<hatModel_dist && d<leftArm_dist && d<rightArm_dist && d<scarf_dist && d<buttons_dist && d<mouth_dist && d<noz_dist && d<eyes_dist) {
+        if (d>0 && fabs(pt.x)<20 && pt.z<0 && pt.z>-30 && d<spheres_dist && d<hatModel_dist && d<leftArm_dist && d<rightArm_dist && d<scarf_dist && d<buttons_dist && d<mouth_dist && d<noz_dist && d<eyes_dist) {
             checkerboard_dist = d;
             hit = pt;
             N = Vec3f(0,1,0);
-            material.diffuse_color = (int(.5*hit.x+1000) + int(.5*hit.z)) & 1 ? Vec3f(.3, .3, .3) : Vec3f(.3, .2, .1);
+            //material.diffuse_color = (int(.5*hit.x+1000) + int(.5*hit.z)) & 1 ? Vec3f(.3, .3, .3) : Vec3f(.3, .2, .1);
             //material = Material(1.5, Vec4f(0.0,  0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8),  125.);
             //applyTexture(dir, snow, wood_width, wood_height, material);
+
+            //applyTexture(dir, snow, snow_width, snow_height, material);
+
+            // On calcul des 2 angles de direction du rayon pour l'envmap
+            float angle_x = atan2(dir.z, dir.x);
+            float angle_y = asin(dir.y);
+
+            // On calcul les coordonnées de l'envmap en fonction des angles en normalisant entre 0 et 1
+            float coord_x = (angle_x + M_PI)/(2*M_PI);
+            float coord_y = 1-(angle_y + M_PI/2)/M_PI; // On inverse l'image verticalement
+
+            // On récupère le pixel de l'envmap correspondant aux coordonnées
+            int x = std::min((int)(coord_x*envmap_width), envmap_width-1);
+            int y = std::min((int)(coord_y*envmap_height), envmap_height-1);
+            Vec3f textureTmp = envmap[x+y*envmap_width];
+
+            // On crée un materiel par rapport au pixel recuperé sur l'image de la texture
+            material = Material(1.0, Vec4f(1.0,  0.0, 0.0, 0.0), Vec3f(textureTmp.x, textureTmp.y, textureTmp.z),   1000.);
+
+            // On applicque une couleur transparente 
+            //material = Material(1.5, Vec4f(0.0,  0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8),  125.);
+
+            /*if ((int(.5*hit.x+1000) + int(.5*hit.z)) & 1) {
+                material.diffuse_color = Vec3f(.5, .5, .1);
+            } else {
+                // ---- Calculs pour texturer l'objet ---- //
+                // On calcul des 2 angles de direction du rayon
+                /*float angle_x = atan2(dir.z, dir.x);
+                float angle_y = asin(dir.y);
+
+                // On calcul les coordonnées de l'envmap en fonction des angles en normalisant entre 0 et 1
+                float coord_x = (angle_x + M_PI)/(2*M_PI);
+                float coord_y = 1-(angle_y + M_PI/2)/M_PI; // On inverse l'image verticalement
+
+                // On recupère les coordonnées sur l'image
+                int x = std::min((int)(coord_x*width), width-1);
+                int y = std::min((int)(coord_y*height), height-1);
+                Vec3f textureTmp = snow[x+y*width];*/
+
+                /*applyTexture(dir, snow, snow_width, snow_height, material);
+            }*/
         }
     }
 
@@ -398,8 +439,8 @@ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphere> &s
 }
 
 void render(const std::vector<Sphere> &spheres, const std::vector<Light> &lights) {
-    const int   width    = 800;
-    const int   height   = 450;
+    const int   width    = 1280;
+    const int   height   = 720;
     const float fov_deg  = 240.0; // FOV en degrés
     const float fov_rad  = fov_deg * M_PI / 180.0; // Conversion degrés -> radians
     float dir_z = height / (2. * tan(fov_rad / 2.));
@@ -455,7 +496,7 @@ int main() {
     loadTexture("../assets/texture_laine.jpg", scarf, scarf_width, scarf_height); // Texture de la laine
 
     // Position du bonhomme de neige et taille
-    float posX = 0.0, posY = -7.0, posZ = -7.0, size = 1;
+    float posX = 0.0, posY = -6.0, posZ = -6.0, size = 1;
 
     // Définition du corps
     std::vector<Sphere> spheres;
@@ -481,10 +522,10 @@ int main() {
     Model btn4 = buttonModel;
 
     // Position des boutons
-    btn1.translate(posX - 0.25, posY + 3.4,posZ + size*2 - 0.6); // milieu
-    btn2.translate(posX - 0.25, posY + 2.4, posZ + size*2 - 0.4); // milieu
-    btn3.translate(posX - 0.25, posY + 1.25, posZ + size*2 - 0.4); // bas
-    btn4.translate(posX - 0.25, posY + 0.25, posZ + size*2); // bas
+    btn1.translate(posX - 0.25, posY + 3.4,posZ + size*2 - 0.8); // milieu
+    btn2.translate(posX - 0.25, posY + 2.4, posZ + size*2 - 0.5); // milieu
+    btn3.translate(posX - 0.25, posY + 1.25, posZ + size*2 - 0.5); // bas
+    btn4.translate(posX - 0.25, posY + 0.25, posZ + size*2 - 0.05); // bas
 
     // Ajout des boutons dans le vecteur
     buttons.push_back(btn1);
@@ -508,7 +549,7 @@ int main() {
     nozModel.translate(posX - 0.1, posY + 4.4, posZ + size);
 
     // Position des lumières
-    float lightX = 10.0, lightY = 50.0, lightZ = 100.0;
+    float lightX = 100.0, lightY = 50.0, lightZ = 100.0;
 
     // Définition des lumières, vec position (x, y, z), intensité
     std::vector<Light>  lights;
