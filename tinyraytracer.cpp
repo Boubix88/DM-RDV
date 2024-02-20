@@ -363,8 +363,10 @@ bool scene_intersect(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphe
             int y = std::min((int)(coord_y*envmap_height), envmap_height-1);
             Vec3f textureTmp = envmap[x+y*envmap_width];
 
+            // on affiche les valeurs de hit
+            //std::cout << "x : " << hit.x << " y : " << hit.y << " z : " << hit.z << std::endl;
             // On crée un materiel par rapport au pixel recuperé sur l'image de la texture
-            material = Material(1.0, Vec4f(1.0,  0.0, 0.0, 0.0), Vec3f(textureTmp.x, textureTmp.y, textureTmp.z),   1000.);
+            material.diffuse_color = Vec3f(textureTmp.x + 0.2, textureTmp.y + 0.2, textureTmp.z + 0.2);
 
             // On applicque une couleur transparente 
             //material = Material(1.5, Vec4f(0.0,  0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8),  125.);
@@ -439,8 +441,8 @@ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphere> &s
 }
 
 void render(const std::vector<Sphere> &spheres, const std::vector<Light> &lights) {
-    const int   width    = 1280;
-    const int   height   = 720;
+    const int   width    = 800;
+    const int   height   = 450;
     const float fov_deg  = 240.0; // FOV en degrés
     const float fov_rad  = fov_deg * M_PI / 180.0; // Conversion degrés -> radians
     float dir_z = height / (2. * tan(fov_rad / 2.));
