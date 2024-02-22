@@ -18,6 +18,10 @@
 #include "model.h"
 #include "geometry.h"
 
+// Taille de l'image de sortie
+#define OUT_WIDTH 3840
+#define OUT_HEIGHT 2160
+
 int envmap_width, envmap_height;
 int snow_width, snow_height;
 int wood_width, wood_height;
@@ -157,6 +161,13 @@ Vec3f refract(const Vec3f &I, const Vec3f &N, const float eta_t, const float eta
     float eta = eta_i / eta_t;
     float k = 1 - eta*eta*(1 - cosi*cosi);
     return k<0 ? Vec3f(1,0,0) : I*eta + N*(eta*cosi - sqrtf(k)); // k<0 = total reflection, no ray to refract. I refract it anyways, this has no physical meaning
+}
+
+float distance_vector(Vec3f point1, Vec3f point2) {
+    float deltaX = point2.x - point1.x;
+    float deltaY = point2.y - point1.y;
+    float deltaZ = point2.z - point1.z;
+    return std::sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 }
 
 bool scene_intersect(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphere> &spheres, Vec3f &hit, Vec3f &N, Material &material) {
@@ -344,11 +355,6 @@ bool scene_intersect(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphe
             checkerboard_dist = d;
             hit = pt;
             N = Vec3f(0,1,0);
-            //material.diffuse_color = (int(.5*hit.x+1000) + int(.5*hit.z)) & 1 ? Vec3f(.3, .3, .3) : Vec3f(.3, .2, .1);
-            //material = Material(1.5, Vec4f(0.0,  0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8),  125.);
-            //applyTexture(dir, snow, wood_width, wood_height, material);
-
-            //applyTexture(dir, snow, snow_width, snow_height, material);
 
             // On calcul des 2 angles de direction du rayon pour l'envmap
             float angle_x = atan2(dir.z, dir.x);
@@ -363,36 +369,21 @@ bool scene_intersect(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphe
             int y = std::min((int)(coord_y*envmap_height), envmap_height-1);
             Vec3f textureTmp = envmap[x+y*envmap_width];
 
-            // on affiche les valeurs de hit
-            //std::cout << "x : " << hit.x << " y : " << hit.y << " z : " << hit.z << std::endl;
-            // On crée un materiel par rapport au pixel recuperé sur l'image de la texture
-            material.diffuse_color = Vec3f(textureTmp.x + 0.2, textureTmp.y + 0.2, textureTmp.z + 0.2);
+            // Calculer la valeur normalisée de pt.x dans la plage [0, 1]
+            float normalizedX = (d - (-30)) / (0 - (-30));
 
-            // On applicque une couleur transparente 
-            //material = Material(1.5, Vec4f(0.0,  0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8),  125.);
-
-            /*if ((int(.5*hit.x+1000) + int(.5*hit.z)) & 1) {
-                material.diffuse_color = Vec3f(.5, .5, .1);
+            // Ajuster la plage de sortie de 0 à 0.1
+            float coeff = 0.0;
+            if (pt.x < 0.0) {
+                coeff = normalizedX * 0.1;
             } else {
-                // ---- Calculs pour texturer l'objet ---- //
-                // On calcul des 2 angles de direction du rayon
-                /*float angle_x = atan2(dir.z, dir.x);
-                float angle_y = asin(dir.y);
+                coeff = normalizedX * 0.1 - pt.x/120;
+            }
 
-                // On calcul les coordonnées de l'envmap en fonction des angles en normalisant entre 0 et 1
-                float coord_x = (angle_x + M_PI)/(2*M_PI);
-                float coord_y = 1-(angle_y + M_PI/2)/M_PI; // On inverse l'image verticalement
-
-                // On recupère les coordonnées sur l'image
-                int x = std::min((int)(coord_x*width), width-1);
-                int y = std::min((int)(coord_y*height), height-1);
-                Vec3f textureTmp = snow[x+y*width];*/
-
-                /*applyTexture(dir, snow, snow_width, snow_height, material);
-            }*/
+            // On crée un materiel par rapport au pixel recuperé sur l'image de la texture
+            material.diffuse_color = Vec3f(textureTmp.x + coeff, textureTmp.y + coeff, textureTmp.z + coeff);
         }
     }
-
 
     return  std::min({spheres_dist, hatModel_dist, leftArm_dist, rightArm_dist, scarf_dist, buttons_dist, mouth_dist, noz_dist, eyes_dist, checkerboard_dist}) < 1000;
 }
@@ -441,24 +432,23 @@ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const std::vector<Sphere> &s
 }
 
 void render(const std::vector<Sphere> &spheres, const std::vector<Light> &lights) {
-    const int   width    = 800;
-    const int   height   = 450;
     const float fov_deg  = 240.0; // FOV en degrés
     const float fov_rad  = fov_deg * M_PI / 180.0; // Conversion degrés -> radians
-    float dir_z = height / (2. * tan(fov_rad / 2.));
+    //const float fov_rad = 4.8; // FOV en radians
+    float dir_z = OUT_HEIGHT / (2. * tan(fov_rad / 2.));
 
     // On affiche la profondeur de champ
     std::cout << "Profondeur de champ : " << dir_z << std::endl;
 
-    std::vector<unsigned char> pixmap(width * height * 3);
+    std::vector<unsigned char> pixmap(OUT_WIDTH * OUT_HEIGHT * 3);
 
     // Affichage du pourcentage de chargement
     float index = 0;
     #pragma omp parallel for
-    for (size_t j = 0; j < height; j++) { // actual rendering loop
-        for (size_t i = 0; i < width; i++) {
-            float dir_x = (i + 0.5) - width / 2.;
-            float dir_y = -(j + 0.5) + height / 2.; // this flips the image at the same time
+    for (size_t j = 0; j < OUT_HEIGHT; j++) { // actual rendering loop
+        for (size_t i = 0; i < OUT_WIDTH; i++) {
+            float dir_x = (i + 0.5) - OUT_WIDTH / 2.;
+            float dir_y = -(j + 0.5) + OUT_HEIGHT / 2.; // this flips the image at the same time
 
             // Calcul de la couleur du pixel
             Vec3f color = cast_ray(Vec3f(0, 0, 0), Vec3f(dir_x, dir_y, dir_z).normalize(), spheres, lights);
@@ -467,7 +457,7 @@ void render(const std::vector<Sphere> &spheres, const std::vector<Light> &lights
             float max_component = std::max({color[0], color[1], color[2]});
 
             // Conversion et sauvegarde dans le pixmap
-            size_t index_pixmap = (j * width + i) * 3;
+            size_t index_pixmap = (j * OUT_WIDTH + i) * 3;
             for (size_t k = 0; k < 3; k++) {
                 float channel = max_component > 1 ? color[k] / max_component : color[k];
                 pixmap[index_pixmap + k] = static_cast<unsigned char>(255 * std::max(0.f, std::min(1.f, channel)));
@@ -477,13 +467,13 @@ void render(const std::vector<Sphere> &spheres, const std::vector<Light> &lights
         // Affichage du pourcentage de chargement
         #pragma omp atomic
         index++;
-        afficherProgression("Rendu de l'image", index, height);
+        afficherProgression("Rendu de l'image", index, OUT_HEIGHT);
     }
 
     std::cout << std::endl; // Saut de ligne à la fin
 
     // Écriture de l'image dans un fichier
-    stbi_write_jpg("out.jpg", width, height, 3, pixmap.data(), 100);
+    stbi_write_jpg("out.jpg", OUT_WIDTH, OUT_HEIGHT, 3, pixmap.data(), 100);
 
     std::cout << "Terminé. Fichier enregistré : /build/out.jpg" << std::endl;
 }
@@ -507,15 +497,15 @@ int main() {
     spheres.push_back(Sphere(Vec3f(posX, posY + 4.5, posZ), size, white)); // tete
 
     // Définition de la bouche
-    mouth.push_back(Sphere(Vec3f(posX - 0.5, posY + 4.3, posZ + size),0.1 , black_rubber));
-    mouth.push_back(Sphere(Vec3f(posX - 0.25, posY + 4.15, posZ + size),0.1 , black_rubber));
-    mouth.push_back(Sphere(Vec3f(posX, posY + 4.1, posZ + size),0.1 , black_rubber));
-    mouth.push_back(Sphere(Vec3f(posX + 0.25, posY + 4.15, posZ + size),0.1 , black_rubber));
-    mouth.push_back(Sphere(Vec3f(posX + 0.5, posY + 4.3, posZ + size),0.1 , black_rubber));
+    mouth.push_back(Sphere(Vec3f(posX - 0.5, posY + 4.3, posZ + size - 0.02),0.1 , black_rubber));
+    mouth.push_back(Sphere(Vec3f(posX - 0.25, posY + 4.15, posZ + size - 0.05),0.1 , black_rubber));
+    mouth.push_back(Sphere(Vec3f(posX, posY + 4.1, posZ + size - 0.05),0.1 , black_rubber));
+    mouth.push_back(Sphere(Vec3f(posX + 0.25, posY + 4.15, posZ + size - 0.05),0.1 , black_rubber));
+    mouth.push_back(Sphere(Vec3f(posX + 0.5, posY + 4.3, posZ + size - 0.02),0.1 , black_rubber));
 
     // Définition des yeux
-    eyes.push_back(Sphere(Vec3f(posX - 0.3, posY + 4.8, posZ + size), 0.1, black_rubber)); // oeil gauche
-    eyes.push_back(Sphere(Vec3f(posX + 0.3, posY + 4.8, posZ + size), 0.1, black_rubber)); // oeil droits
+    eyes.push_back(Sphere(Vec3f(posX - 0.3, posY + 4.8, posZ + size - 0.02), 0.1, black_rubber)); // oeil gauche
+    eyes.push_back(Sphere(Vec3f(posX + 0.3, posY + 4.8, posZ + size - 0.02), 0.1, black_rubber)); // oeil droits
 
     // Définition des boutons
     Model btn1 = buttonModel;
@@ -525,9 +515,9 @@ int main() {
 
     // Position des boutons
     btn1.translate(posX - 0.25, posY + 3.4,posZ + size*2 - 0.8); // milieu
-    btn2.translate(posX - 0.25, posY + 2.4, posZ + size*2 - 0.5); // milieu
-    btn3.translate(posX - 0.25, posY + 1.25, posZ + size*2 - 0.5); // bas
-    btn4.translate(posX - 0.25, posY + 0.25, posZ + size*2 - 0.05); // bas
+    btn2.translate(posX - 0.25, posY + 2.4, posZ + size*2 - 0.52); // milieu
+    btn3.translate(posX - 0.25, posY + 1.25, posZ + size*2 - 0.52); // bas
+    btn4.translate(posX - 0.25, posY + 0.25, posZ + size*2 - 0.07); // bas
 
     // Ajout des boutons dans le vecteur
     buttons.push_back(btn1);
@@ -536,7 +526,7 @@ int main() {
     buttons.push_back(btn4);
 
     // position du chapeau
-    hatModel.translate(posX - size, posY + 5.4, posZ);
+    hatModel.translate(posX - size, posY + 5.4, posZ - 1.0);
 
     // position du bras gauche
     leftArmModel.translate(posX - size * 4.5, posY, posZ);
