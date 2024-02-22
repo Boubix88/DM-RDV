@@ -1,3 +1,7 @@
+### Groupe
+- BELUCHE Quentin
+- GEHIN Sandy
+
 # Compilation
 > [!IMPORTANT]
 > ```sh
