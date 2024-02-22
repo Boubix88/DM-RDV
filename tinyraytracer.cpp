@@ -19,8 +19,8 @@
 #include "geometry.h"
 
 // Taille de l'image de sortie
-#define OUT_WIDTH 3840
-#define OUT_HEIGHT 2160
+#define OUT_WIDTH 1280
+#define OUT_HEIGHT 720
 
 int envmap_width, envmap_height;
 int snow_width, snow_height;
